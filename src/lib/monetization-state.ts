@@ -1,28 +1,32 @@
-import { useEffect, useState } from "react";
+/**
+ * Creator earnings state. Everything here comes from the backend — balances are
+ * derived from real recorded tips and real payouts, and withdrawals go through
+ * the payment provider. No local seeding, no cached fake ledger.
+ */
+import { useCallback, useEffect, useState } from "react";
 
-import { attachRemoteRecord, insertOwnedRow, loadOwnedRows, signedInProfileId } from "@/lib/remote-store";
-import { getTipsForMe, sendTipApi } from "@/lib/api-client";
+import { signedInProfileId } from "@/lib/remote-store";
+import { sendTipApi } from "@/lib/api-client";
+import {
+  getEarnings,
+  listPayoutBanks,
+  refreshPayoutStatus,
+  requestPayout as requestPayoutApi,
+  savePayoutDestination,
+} from "@/lib/payouts.functions";
 
-export interface BankDetails {
-  bankName: string;
-  routingNumber: string;
+/** Withdrawal rails supported by the payment provider. */
+export type PayoutMethod = "bank" | "mobile_money";
+
+export interface PayoutDestination {
+  method: PayoutMethod;
+  accountName: string;
   accountNumberLast4: string;
-  accountHolder: string;
-  isConnected: boolean;
-}
-
-export interface StripeDetails {
-  email: string;
-  country: string;
-  isConnected: boolean;
-  chargesEnabled: boolean;
-}
-
-export interface CryptoDetails {
-  network: "solana" | "ethereum" | "polygon" | "bitcoin";
-  address: string;
-  currency: "USDC" | "SOL" | "ETH" | "BTC";
-  isConnected: boolean;
+  bankCode: string;
+  bankName: string;
+  recipientCode?: string | null;
+  currency?: string;
+  verifiedAt?: string;
 }
 
 export interface TipRecord {
@@ -39,17 +43,17 @@ export interface PayoutRecord {
   id: string;
   amount: number;
   method: string;
+  status: string;
+  reference: string | null;
+  destination: string | null;
+  failureReason: string | null;
   date: string;
-  status: "paid" | "pending";
 }
 
 export interface MonetizationSettings {
   minimumTip: number;
-  customThankYouMessage: string;
-  showTipBadgeOnProfile: boolean;
+  tipsEnabled: boolean;
 }
-
-export type PayoutMethod = "stripe" | "bank" | "crypto";
 
 export interface SendTipInput {
   recipientUsername: string;
@@ -62,120 +66,113 @@ export interface SendTipInput {
   spaceId?: string;
 }
 
+export interface PayoutBank {
+  name: string;
+  code: string;
+  type: string;
+  isMobileMoney: boolean;
+}
+
 interface MonetizationState {
+  loading: boolean;
   totalEarnings: number;
   pendingBalance: number;
+  currency: string;
   tipsReceived: TipRecord[];
   payouts: PayoutRecord[];
   activePayoutMethod: PayoutMethod;
-  bankDetails: BankDetails;
-  stripeDetails: StripeDetails;
-  cryptoDetails: CryptoDetails;
+  destination: PayoutDestination | null;
   settings: MonetizationSettings;
 }
 
-const STORAGE_KEY = "spaces:monetization";
-
-const DEFAULTS: MonetizationState = {
+const EMPTY: MonetizationState = {
+  loading: true,
   totalEarnings: 0,
   pendingBalance: 0,
+  currency: "KES",
   tipsReceived: [],
   payouts: [],
-  activePayoutMethod: "stripe",
-  bankDetails: {
-    bankName: "",
-    routingNumber: "",
-    accountNumberLast4: "",
-    accountHolder: "",
-    isConnected: false,
-  },
-  stripeDetails: { email: "", country: "US", isConnected: false, chargesEnabled: false },
-  cryptoDetails: { network: "solana", address: "", currency: "USDC", isConnected: false },
-  settings: {
-    minimumTip: 1,
-    customThankYouMessage: "Thank you so much for supporting my creative work on Spaces! 💖",
-    showTipBadgeOnProfile: true,
-  },
+  activePayoutMethod: "bank",
+  destination: null,
+  settings: { minimumTip: 1, tipsEnabled: true },
 };
 
-function read(): MonetizationState {
-  if (typeof window === "undefined") return DEFAULTS;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? { ...DEFAULTS, ...(JSON.parse(raw) as MonetizationState) } : DEFAULTS;
-  } catch {
-    return DEFAULTS;
-  }
-}
-
-let state = read();
+let state: MonetizationState = EMPTY;
 const listeners = new Set<() => void>();
+let inFlight: Promise<void> | null = null;
 
-const remote = attachRemoteRecord<MonetizationState>({
-  table: "monetization_settings",
-  fromRow: (row) => ({
-    activePayoutMethod: (row.payout_method ?? "bank") as PayoutMethod,
-    bankDetails: { ...state.bankDetails, ...(row.bank_details ?? {}) },
-    stripeDetails: { ...state.stripeDetails, ...(row.stripe_details ?? {}) },
-    cryptoDetails: { ...state.cryptoDetails, ...(row.crypto_details ?? {}) },
-    settings: {
-      ...state.settings,
-      minimumTip: Number(row.min_tip ?? state.settings.minimumTip),
-    },
-  }),
-  toRow: (s) => ({
-    payout_method: s.activePayoutMethod,
-    bank_details: s.bankDetails,
-    stripe_details: s.stripeDetails,
-    crypto_details: s.cryptoDetails,
-    min_tip: s.settings.minimumTip,
-    tips_enabled: true,
-  }),
-  apply: (patch) => {
-    state = { ...state, ...patch };
-    listeners.forEach((fn) => fn());
-  },
-});
-
-async function hydrateLedger() {
-  if (!signedInProfileId()) return;
-  const [tips, payouts] = await Promise.all([
-    getTipsForMe(),
-    loadOwnedRows("payouts", (row) => ({
-      id: String(row.id),
-      amount: Number(row.amount),
-      method: String(row.method),
-      date: new Date(row.created_at).toLocaleDateString(),
-      status: (row.status === "paid" ? "paid" : "pending") as PayoutRecord["status"],
-    })),
-  ]);
-  const tipsReceived: TipRecord[] = tips.map((row: any) => ({
-    id: String(row.id),
-    senderName: String(row.from_user_id),
-    senderUsername: String(row.from_user_id),
-    amount: Number(row.amount),
-    message: row.message || undefined,
-    timestamp: new Date(row.created_at).toLocaleString(),
-  }));
-  const totalEarnings = tipsReceived.reduce((sum, t) => sum + t.amount, 0);
-  const paidOut = payouts.filter((p) => p.status === "paid").reduce((sum, p) => sum + p.amount, 0);
-  commit({
-    tipsReceived,
-    payouts,
-    totalEarnings,
-    pendingBalance: Math.max(0, totalEarnings - paidOut),
-  });
+function publish(next: MonetizationState) {
+  state = next;
+  listeners.forEach((fn) => fn());
 }
 
-function commit(patch: Partial<MonetizationState>) {
-  state = { ...state, ...patch };
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* storage unavailable */
+export async function refreshMonetization() {
+  if (!signedInProfileId()) {
+    publish({ ...EMPTY, loading: false });
+    return;
   }
-  listeners.forEach((fn) => fn());
-  remote.push(state);
+  if (inFlight) return inFlight;
+  inFlight = (async () => {
+    try {
+      const data = await getEarnings();
+      const paystack = (data.settings?.paystack ?? {}) as Partial<PayoutDestination>;
+      publish({
+        loading: false,
+        totalEarnings: data.totalEarnings,
+        pendingBalance: data.pendingBalance,
+        currency: data.currency,
+        tipsReceived: data.tips.map((t) => ({
+          id: t.id,
+          senderName: t.senderName,
+          senderUsername: t.senderUsername,
+          senderAvatar: t.senderAvatar,
+          amount: t.amount,
+          message: t.message || undefined,
+          timestamp: new Date(t.createdAt).toLocaleString(),
+        })),
+        payouts: data.payouts.map((p) => ({
+          id: p.id,
+          amount: p.amount,
+          method: p.method,
+          status: p.status,
+          reference: p.reference,
+          destination: p.destination,
+          failureReason: p.failureReason,
+          date: new Date(p.createdAt).toLocaleDateString(),
+        })),
+        activePayoutMethod: (data.settings?.payoutMethod ?? "bank") as PayoutMethod,
+        destination: paystack?.recipientCode ? (paystack as PayoutDestination) : null,
+        settings: {
+          minimumTip: data.settings?.minimumTip ?? 1,
+          tipsEnabled: data.settings?.tipsEnabled ?? true,
+        },
+      });
+    } catch {
+      publish({ ...state, loading: false });
+    } finally {
+      inFlight = null;
+    }
+  })();
+  return inFlight;
+}
+
+/** Read-only balance for small surfaces such as the profile tip button. */
+export function useCreatorBalance() {
+  const [snapshot, setSnapshot] = useState(state);
+  useEffect(() => {
+    const sync = () => setSnapshot({ ...state });
+    listeners.add(sync);
+    sync();
+    void refreshMonetization();
+    return () => {
+      listeners.delete(sync);
+    };
+  }, []);
+  return {
+    loading: snapshot.loading,
+    totalEarnings: snapshot.totalEarnings,
+    pendingBalance: snapshot.pendingBalance,
+  };
 }
 
 export function useMonetization() {
@@ -185,13 +182,13 @@ export function useMonetization() {
     const sync = () => setSnapshot({ ...state });
     listeners.add(sync);
     sync();
-    void hydrateLedger();
+    void refreshMonetization();
     return () => {
       listeners.delete(sync);
     };
   }, []);
 
-  async function sendTip(input: SendTipInput) {
+  const sendTip = useCallback(async (input: SendTipInput) => {
     await sendTipApi({
       recipientUsername: input.recipientUsername,
       amount: input.amount,
@@ -199,53 +196,47 @@ export function useMonetization() {
       postId: input.postId,
       spaceId: input.spaceId,
     });
-    const record: TipRecord = {
-      id: `tip_${Date.now()}`,
-      senderName: input.senderName,
-      senderUsername: input.senderUsername,
-      senderAvatar: input.senderAvatar,
-      amount: input.amount,
-      message: input.message,
-      timestamp: new Date().toLocaleString(),
-    };
-    commit({
-      tipsReceived: [record, ...state.tipsReceived],
-      totalEarnings: state.totalEarnings + input.amount,
-      pendingBalance: state.pendingBalance + input.amount,
-    });
-    return record;
-  }
+    await refreshMonetization();
+  }, []);
 
-  async function requestPayout(): Promise<PayoutRecord | null> {
-    if (state.pendingBalance <= 0) return null;
-    const row = await insertOwnedRow("payouts", {
-      amount: state.pendingBalance,
-      method: state.activePayoutMethod,
-      status: "paid",
-    });
-    const record: PayoutRecord = {
-      id: String(row?.id ?? `po_${Date.now()}`),
-      amount: state.pendingBalance,
-      method: state.activePayoutMethod,
-      date: new Date().toLocaleDateString(),
-      status: "paid",
-    };
-    commit({ payouts: [record, ...state.payouts], pendingBalance: 0 });
-    return record;
-  }
+  const requestPayout = useCallback(async (amount?: number) => {
+    const result = await requestPayoutApi({ data: { amount } });
+    await refreshMonetization();
+    return result;
+  }, []);
+
+  const saveDestination = useCallback(
+    async (input: {
+      method: PayoutMethod;
+      accountName: string;
+      accountNumber: string;
+      bankCode: string;
+      bankName: string;
+    }) => {
+      const details = await savePayoutDestination({ data: input });
+      await refreshMonetization();
+      return details;
+    },
+    [],
+  );
+
+  const loadBanks = useCallback(async (): Promise<PayoutBank[]> => {
+    return (await listPayoutBanks()) as PayoutBank[];
+  }, []);
+
+  const checkPayout = useCallback(async (reference: string) => {
+    const result = await refreshPayoutStatus({ data: { reference } });
+    await refreshMonetization();
+    return result;
+  }, []);
 
   return {
     ...snapshot,
     sendTip,
     requestPayout,
-    setActivePayoutMethod: (method: PayoutMethod) => commit({ activePayoutMethod: method }),
-    updateBankDetails: (patch: Partial<BankDetails>) =>
-      commit({ bankDetails: { ...state.bankDetails, ...patch } }),
-    updateStripeDetails: (patch: Partial<StripeDetails>) =>
-      commit({ stripeDetails: { ...state.stripeDetails, ...patch } }),
-    updateCryptoDetails: (patch: Partial<CryptoDetails>) =>
-      commit({ cryptoDetails: { ...state.cryptoDetails, ...patch } }),
-    updateMonetizationSettings: (patch: Partial<MonetizationSettings>) =>
-      commit({ settings: { ...state.settings, ...patch } }),
+    saveDestination,
+    loadBanks,
+    checkPayout,
+    refresh: refreshMonetization,
   };
 }
