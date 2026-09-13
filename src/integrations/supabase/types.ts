@@ -480,6 +480,7 @@ export type Database = {
           crypto_details: Json
           min_tip: number
           payout_method: string
+          paystack_details: Json
           stripe_details: Json
           subscriptions_enabled: boolean
           tips_enabled: boolean
@@ -492,6 +493,7 @@ export type Database = {
           crypto_details?: Json
           min_tip?: number
           payout_method?: string
+          paystack_details?: Json
           stripe_details?: Json
           subscriptions_enabled?: boolean
           tips_enabled?: boolean
@@ -504,6 +506,7 @@ export type Database = {
           crypto_details?: Json
           min_tip?: number
           payout_method?: string
+          paystack_details?: Json
           stripe_details?: Json
           subscriptions_enabled?: boolean
           tips_enabled?: boolean
@@ -631,25 +634,46 @@ export type Database = {
         Row: {
           amount: number
           created_at: string
+          currency: string
+          destination: string | null
+          failure_reason: string | null
           id: string
           method: string
+          recipient_code: string | null
+          reference: string | null
           status: string
+          transfer_code: string | null
+          updated_at: string
           user_id: string
         }
         Insert: {
           amount: number
           created_at?: string
+          currency?: string
+          destination?: string | null
+          failure_reason?: string | null
           id?: string
           method?: string
+          recipient_code?: string | null
+          reference?: string | null
           status?: string
+          transfer_code?: string | null
+          updated_at?: string
           user_id: string
         }
         Update: {
           amount?: number
           created_at?: string
+          currency?: string
+          destination?: string | null
+          failure_reason?: string | null
           id?: string
           method?: string
+          recipient_code?: string | null
+          reference?: string | null
           status?: string
+          transfer_code?: string | null
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
