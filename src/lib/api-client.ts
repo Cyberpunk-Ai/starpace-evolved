@@ -1536,3 +1536,28 @@ export async function getSystemConfig() {
     brand: appConfig.brand,
   };
 }
+
+/* --------------------------------------------------------------- reposts */
+
+/** Posts a profile has reposted, newest repost first. */
+export async function getRepostedPosts(profileId: string, limit = 50): Promise<Post[]> {
+  const { data: rows } = await db
+    .from("reposts")
+    .select("post_id, created_at")
+    .eq("user_id", profileId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  const ids = ((rows ?? []) as any[]).map((r) => String(r.post_id));
+  if (ids.length === 0) return [];
+
+  const { data } = await db.from("posts").select("*").in("id", ids).eq("hidden", false);
+  const byId = new Map<string, Post>(
+    ((data ?? []) as any[]).map((row) => [String(row.id), rowToPost(row)]),
+  );
+  const posts = ids.map((id) => byId.get(id)).filter(Boolean) as Post[];
+
+  await hydrateAuthors(posts.map((p) => p.user_id));
+  await hydrateEngagement(posts);
+  return posts;
+}
