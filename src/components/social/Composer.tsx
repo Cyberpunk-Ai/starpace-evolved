@@ -38,8 +38,9 @@ export function Composer({
   const [focused, setFocused] = useState(false);
   const [selectedGradient, setSelectedGradient] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const [attachedMedia, setAttachedMedia] = useState<string[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const attachedImage = attachedMedia[0] ?? null;
 
   // Hashtags
   const [customTags, setCustomTags] = useState<string[]>([]);
@@ -107,21 +108,34 @@ export function Composer({
   }
 
   async function handleMediaFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const picked = Array.from(e.target.files ?? []);
+    if (picked.length === 0) return;
 
-    const isVideo = file.type.startsWith("video/");
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error("That file is larger than 50MB. Please choose a smaller one.");
+    const room = MAX_MEDIA - attachedMedia.length;
+    if (room <= 0) {
+      toast.error(`You can attach up to ${MAX_MEDIA} items.`);
       e.target.value = "";
       return;
     }
+
+    const files = picked.slice(0, room);
+    if (picked.length > files.length) {
+      toast.info(`Only the first ${files.length} added — ${MAX_MEDIA} items max.`);
+    }
+
+    const tooBig = files.find((f) => f.size > 50 * 1024 * 1024);
+    if (tooBig) {
+      toast.error("Each file must be under 50MB.");
+      e.target.value = "";
+      return;
+    }
+
     setUploadingImage(true);
     try {
-      const res = await uploadMedia(file, "posts");
-      setAttachedImage(res.url);
+      const uploaded = await Promise.all(files.map((file) => uploadMedia(file, "posts")));
+      setAttachedMedia((prev) => [...prev, ...uploaded.map((u) => u.url)].slice(0, MAX_MEDIA));
       setSelectedGradient(null);
-      toast.success(isVideo ? "Video attached" : "Image attached");
+      toast.success(files.length > 1 ? `${files.length} items attached` : "Attached");
     } catch (err: any) {
       console.error("Upload failed:", err);
       toast.error(err?.message || "Upload failed. Please try again.");
