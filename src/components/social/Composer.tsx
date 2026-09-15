@@ -8,8 +8,10 @@ import { createPost, uploadMedia } from "@/lib/api-client";
 import { AiDraftModal } from "@/components/social/AiDraftModal";
 import { useAuth } from "@/lib/auth-state";
 import { cn } from "@/lib/utils";
+import { isVideoUrl, serializeMediaList } from "@/lib/media";
 
 const LIMIT = 1000;
+const MAX_MEDIA = 4;
 
 const sampleLocations = ["San Francisco, CA", "New York, NY", "Tokyo, Japan", "Berlin, DE", "Design Studio Loft", "Remote 🌿"];
 const popularEmojis = ["✨", "🚀", "💡", "🎨", "❤️", "🔥", "🙌", "🌊", "☕", "🧠", "🎯", "⚡"];
@@ -178,7 +180,7 @@ export function Composer({
       const created = await createPost({
         content: contentWithLocation,
         image_gradient: selectedGradient || undefined,
-        media_url: attachedImage || undefined,
+        media_url: serializeMediaList(attachedMedia),
         tags: customTags,
         poll: pollData,
       });
@@ -186,7 +188,7 @@ export function Composer({
       setDraft("");
       setSelectedGradient(null);
       setSelectedLocation(null);
-      setAttachedImage(null);
+      setAttachedMedia([]);
       setCustomTags([]);
       setShowHashtagPicker(false);
       setShowEmojiPicker(false);
@@ -262,48 +264,43 @@ export function Composer({
               </div>
             )}
 
-            {/* Attached Media Preview (Image or Video) */}
-            {attachedImage && (
-              <div className="relative mt-3 h-52 sm:h-60 w-full overflow-hidden rounded-2xl border border-border/75 bg-neutral-950 shadow-inner group flex items-center justify-center p-2 backdrop-blur-xs">
-                {attachedImage.includes(".mp4") || attachedImage.includes(".webm") || attachedImage.includes(".mov") || attachedImage.startsWith("data:video") ? (
-                  <video
-                    src={attachedImage}
-                    controls
-                    playsInline
-                    className="relative z-10 h-full w-full max-w-full rounded-xl object-cover shadow-md"
-                  />
-                ) : (
-                  <>
-                    <div
-                      className="absolute inset-0 bg-cover bg-center opacity-15 blur-xl pointer-events-none scale-110"
-                      style={{ backgroundImage: `url(${attachedImage})` }}
-                    />
-                    <img
-                      src={attachedImage}
-                      alt="Post attachment"
-                      className="relative z-10 h-full w-auto max-w-full rounded-xl object-contain shadow-md transition-transform duration-300 group-hover:scale-[1.01]"
-                    />
-                  </>
+            {/* Attached media — one large preview, or a tidy grid for several */}
+            {attachedMedia.length > 0 && (
+              <div
+                className={cn(
+                  "mt-3 grid gap-2",
+                  attachedMedia.length === 1 ? "grid-cols-1" : "grid-cols-2",
                 )}
-                <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 rounded-full bg-black/60 backdrop-blur-md px-2.5 py-1 text-[11px] font-semibold text-white/90 shadow-xs">
-                  {attachedImage.includes(".mp4") || attachedImage.includes(".webm") || attachedImage.includes(".mov") || attachedImage.startsWith("data:video") ? (
-                    <>
-                      <Video className="h-3 w-3 text-brand" /> Attached Video
-                    </>
-                  ) : (
-                    <>
-                      <ImageIcon className="h-3 w-3 text-brand" /> Attached Media
-                    </>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAttachedImage(null)}
-                  className="absolute top-2.5 right-2.5 z-20 rounded-full bg-black/60 backdrop-blur-md p-1.5 text-white/90 hover:bg-black/85 hover:text-white transition-all shadow-xs cursor-pointer active:scale-90"
-                  title="Remove media"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+              >
+                {attachedMedia.map((url, idx) => (
+                  <div
+                    key={url + idx}
+                    className={cn(
+                      "group relative overflow-hidden rounded-2xl border border-border/70 bg-muted/40",
+                      attachedMedia.length === 1 ? "aspect-[16/10]" : "aspect-square",
+                      attachedMedia.length === 3 && idx === 0 && "row-span-2 aspect-auto",
+                    )}
+                  >
+                    {isVideoUrl(url) ? (
+                      <video src={url} playsInline muted className="h-full w-full object-cover" />
+                    ) : (
+                      <img src={url} alt="Attachment preview" className="h-full w-full object-cover" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setAttachedMedia((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute right-2 top-2 rounded-full bg-black/55 p-1.5 text-white/90 backdrop-blur-md transition-all hover:bg-black/80 active:scale-90"
+                      title="Remove"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                    {isVideoUrl(url) && (
+                      <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-md">
+                        <Video className="h-3 w-3" /> Video
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
@@ -447,7 +444,7 @@ export function Composer({
                     type="button"
                     onClick={() => {
                       setSelectedGradient(theme.value);
-                      setAttachedImage(null);
+                      setAttachedMedia([]);
                       setShowGradientPicker(false);
                     }}
                     className={cn(
@@ -526,6 +523,7 @@ export function Composer({
                   type="file"
                   ref={fileInputRef}
                   accept="image/*,video/*"
+                  multiple
                   className="hidden"
                   onChange={handleMediaFile}
                 />
