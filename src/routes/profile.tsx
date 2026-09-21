@@ -88,6 +88,8 @@ function ProfilePage() {
   const [userProfile, setUserProfile] = useState<Profile>(resolvedProfile);
   const [tab, setTab] = useState<string>("Posts");
   const [allPosts, setAllPosts] = useState<Post[]>([]);
+  const [reposted, setReposted] = useState<Post[]>([]);
+  const { pendingBalance, loading: balanceLoading } = useCreatorBalance();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
