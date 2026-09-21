@@ -137,6 +137,19 @@ function ProfilePage() {
       .finally(() => setLoading(false));
   }, [isMe, targetId]);
 
+  // Reposts made by the profile being viewed
+  useEffect(() => {
+    let cancelled = false;
+    getRepostedPosts(userProfile.id)
+      .then((rows) => {
+        if (!cancelled) setReposted(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userProfile.id]);
+
   useRealtime((event) => {
     if (event.type === "user_profile_updated" && event.id === userProfile.id) {
       setUserProfile((prev) => ({ ...prev, ...event }));
