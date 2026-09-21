@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Radio, Mic, Calendar, Headphones, Play, Plus, Search, X, Loader2, Sparkles, Check } from "lucide-react";
 import { AppShell, Panel, PageHeader } from "@/components/social/AppShell";
 import { RailFooter } from "@/components/social/RightRail";

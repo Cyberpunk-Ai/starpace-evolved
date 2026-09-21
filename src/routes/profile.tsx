@@ -26,7 +26,8 @@ import { TipModal } from "@/components/social/TipModal";
 import { compact } from "@/lib/formatters";
 import { currentUser as defaultUser, getProfile } from "@/lib/profile-service";
 import type { Post, Profile } from "@/lib/types";
-import { getPosts, getCurrentUser, getUserProfile, toggleFollowUser } from "@/lib/api-client";
+import { getPosts, getCurrentUser, getUserProfile, toggleFollowUser, getRepostedPosts } from "@/lib/api-client";
+import { useCreatorBalance } from "@/lib/monetization-state";
 import { useRealtime } from "@/lib/realtime";
 import { useAuth } from "@/lib/auth-state";
 import { usePlan } from "@/lib/plan-state";
@@ -58,8 +59,8 @@ export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });
 
-const ownTabs = ["Posts", "Replies", "Media", "Likes", "Analytics"] as const;
-const otherTabs = ["Posts", "Replies", "Media", "Likes"] as const;
+const ownTabs = ["Posts", "Reposts", "Replies", "Media", "Likes", "Analytics"] as const;
+const otherTabs = ["Posts", "Reposts", "Replies", "Media", "Likes"] as const;
 
 function ProfilePage() {
   const navigate = useNavigate();
