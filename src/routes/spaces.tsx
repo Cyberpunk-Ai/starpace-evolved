@@ -272,13 +272,15 @@ function SpacesPage() {
   );
 
 
-  // Auto-open space if spaceId is provided in URL
+  // Open a room from a shared link once — never re-open it after the user leaves.
+  const handledSpaceId = useRef<string | null>(null);
   useEffect(() => {
-    if (search.spaceId && allSpaces.length > 0) {
-      const found = allSpaces.find((s) => s.id === search.spaceId);
-      if (found) {
-        setActiveSpace(found);
-      }
+    if (!search.spaceId || allSpaces.length === 0) return;
+    if (handledSpaceId.current === search.spaceId) return;
+    const found = allSpaces.find((s) => s.id === search.spaceId);
+    if (found) {
+      handledSpaceId.current = search.spaceId;
+      setActiveSpace(found);
     }
   }, [search.spaceId, allSpaces]);
 

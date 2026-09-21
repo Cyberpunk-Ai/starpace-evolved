@@ -659,17 +659,38 @@ function PostCardBase({
 
 
       {/* Image Full-screen Lightbox Modal */}
-      {showImagePreview && mediaSrc && typeof document !== "undefined" && createPortal(
+      {showImagePreview && mediaList[previewIndex] && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200"
           onClick={() => setShowImagePreview(false)}
         >
           <div className="relative max-w-5xl max-h-[92vh] overflow-hidden rounded-3xl" onClick={(e) => e.stopPropagation()}>
             <img
-              src={mediaSrc}
+              src={mediaList[previewIndex]}
               alt="Full preview"
               className="max-h-[85vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl"
             />
+            {mediaList.length > 1 && (
+              <>
+                <button
+                  onClick={() => setPreviewIndex((i) => (i - 1 + mediaList.length) % mediaList.length)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/70 px-3 py-2 text-white hover:bg-black/90"
+                  aria-label="Previous"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => setPreviewIndex((i) => (i + 1) % mediaList.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/70 px-3 py-2 text-white hover:bg-black/90"
+                  aria-label="Next"
+                >
+                  ›
+                </button>
+                <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-[11px] font-bold text-white">
+                  {previewIndex + 1} / {mediaList.length}
+                </span>
+              </>
+            )}
             <button
               onClick={() => setShowImagePreview(false)}
               className="absolute top-4 right-4 rounded-full bg-black/70 p-2 text-white hover:bg-black/90 transition-colors cursor-pointer"
