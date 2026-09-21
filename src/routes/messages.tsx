@@ -1227,10 +1227,10 @@ function MessagesPage() {
                       >
                       <div
                         className={cn(
-                          "relative max-w-[88%] rounded-3xl px-3.5 py-2 text-xs leading-relaxed shadow-soft transition-shadow sm:max-w-[72%] sm:px-4 sm:py-2.5 sm:text-sm",
+                          "relative max-w-[88%] rounded-2xl px-3.5 py-2 text-[0.8rem] leading-relaxed transition-colors sm:max-w-[68%] sm:px-3.5 sm:py-2 sm:text-sm",
                           mine
-                            ? "bg-gradient-to-br from-brand to-brand-pink text-white"
-                            : "bg-foreground/5",
+                            ? "bg-brand text-white"
+                            : "bg-foreground/[0.06] text-foreground",
                           mine
                             ? endsGroup
                               ? "rounded-br-lg"
