@@ -204,6 +204,8 @@ function ProfilePage() {
   const list =
     tab === "Posts"
       ? authorPosts
+      : tab === "Reposts"
+      ? reposted
       : tab === "Media"
       ? media
       : tab === "Likes"
