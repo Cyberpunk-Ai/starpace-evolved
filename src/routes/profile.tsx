@@ -260,7 +260,14 @@ function ProfilePage() {
                     title="View Tips & Earnings"
                   >
                     <DollarSign className="h-4 w-4 stroke-[2.5]" />
-                    <span>Tip ($142.50)</span>
+                    <span>
+                      {balanceLoading
+                        ? "Earnings"
+                        : `Earnings (${pendingBalance.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })})`}
+                    </span>
                   </button>
                 ) : (
                   <button
