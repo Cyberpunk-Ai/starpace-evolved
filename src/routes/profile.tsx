@@ -26,7 +26,8 @@ import { TipModal } from "@/components/social/TipModal";
 import { compact } from "@/lib/formatters";
 import { currentUser as defaultUser, getProfile } from "@/lib/profile-service";
 import type { Post, Profile } from "@/lib/types";
-import { getPosts, getCurrentUser, getUserProfile, toggleFollowUser } from "@/lib/api-client";
+import { getPosts, getCurrentUser, getUserProfile, toggleFollowUser, getRepostedPosts } from "@/lib/api-client";
+import { useCreatorBalance } from "@/lib/monetization-state";
 import { useRealtime } from "@/lib/realtime";
 import { useAuth } from "@/lib/auth-state";
 import { usePlan } from "@/lib/plan-state";
@@ -58,8 +59,8 @@ export const Route = createFileRoute("/profile")({
   component: ProfilePage,
 });
 
-const ownTabs = ["Posts", "Replies", "Media", "Likes", "Analytics"] as const;
-const otherTabs = ["Posts", "Replies", "Media", "Likes"] as const;
+const ownTabs = ["Posts", "Reposts", "Replies", "Media", "Likes", "Analytics"] as const;
+const otherTabs = ["Posts", "Reposts", "Replies", "Media", "Likes"] as const;
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -87,6 +88,8 @@ function ProfilePage() {
   const [userProfile, setUserProfile] = useState<Profile>(resolvedProfile);
   const [tab, setTab] = useState<string>("Posts");
   const [allPosts, setAllPosts] = useState<Post[]>([]);
+  const [reposted, setReposted] = useState<Post[]>([]);
+  const { pendingBalance, loading: balanceLoading } = useCreatorBalance();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -133,6 +136,19 @@ function ProfilePage() {
       .catch((err) => console.warn("Failed loading profile details:", err))
       .finally(() => setLoading(false));
   }, [isMe, targetId]);
+
+  // Reposts made by the profile being viewed
+  useEffect(() => {
+    let cancelled = false;
+    getRepostedPosts(userProfile.id)
+      .then((rows) => {
+        if (!cancelled) setReposted(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userProfile.id]);
 
   useRealtime((event) => {
     if (event.type === "user_profile_updated" && event.id === userProfile.id) {
@@ -188,6 +204,8 @@ function ProfilePage() {
   const list =
     tab === "Posts"
       ? authorPosts
+      : tab === "Reposts"
+      ? reposted
       : tab === "Media"
       ? media
       : tab === "Likes"
@@ -242,7 +260,14 @@ function ProfilePage() {
                     title="View Tips & Earnings"
                   >
                     <DollarSign className="h-4 w-4 stroke-[2.5]" />
-                    <span>Tip ($142.50)</span>
+                    <span>
+                      {balanceLoading
+                        ? "Earnings"
+                        : `Earnings (${pendingBalance.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })})`}
+                    </span>
                   </button>
                 ) : (
                   <button

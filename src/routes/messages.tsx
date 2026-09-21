@@ -100,14 +100,55 @@ function previewLabel(preview: string) {
   return preview;
 }
 
+const URL_PATTERN = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/g;
+
+/** Renders message text with full, clickable links — never shortened. */
+function LinkedText({ body, isMine }: { body: string; isMine: boolean }) {
+  const parts = body.split(URL_PATTERN);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (!part) return null;
+        if (URL_PATTERN.test(part)) {
+          URL_PATTERN.lastIndex = 0;
+          const href = part.startsWith("http") ? part : `https://${part}`;
+          return (
+            <a
+              key={i}
+              href={href}
+              target="_blank"
+              rel="noreferrer noopener"
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "break-words underline decoration-current/40 underline-offset-2 transition-colors hover:decoration-current",
+                isMine ? "text-white" : "text-brand",
+              )}
+            >
+              {part}
+            </a>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 /** Long messages collapse to a few lines with a "… more" toggle. */
 function MessageText({ body, isMine }: { body: string; isMine: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = body.length > 320 || body.split("\n").length > 6;
-  if (!isLong) return <p className="whitespace-pre-wrap break-words">{body}</p>;
+  if (!isLong)
+    return (
+      <p className="whitespace-pre-wrap break-words">
+        <LinkedText body={body} isMine={isMine} />
+      </p>
+    );
   return (
     <div>
-      <p className={cn("whitespace-pre-wrap break-words", !expanded && "line-clamp-5")}>{body}</p>
+      <p className={cn("whitespace-pre-wrap break-words", !expanded && "line-clamp-5")}>
+        <LinkedText body={body} isMine={isMine} />
+      </p>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -1186,10 +1227,10 @@ function MessagesPage() {
                       >
                       <div
                         className={cn(
-                          "relative max-w-[88%] rounded-3xl px-3.5 py-2 text-xs leading-relaxed shadow-soft transition-shadow sm:max-w-[72%] sm:px-4 sm:py-2.5 sm:text-sm",
+                          "relative max-w-[88%] rounded-2xl px-3.5 py-2 text-[0.8rem] leading-relaxed transition-colors sm:max-w-[68%] sm:px-3.5 sm:py-2 sm:text-sm",
                           mine
-                            ? "bg-gradient-to-br from-brand to-brand-pink text-white"
-                            : "bg-foreground/5",
+                            ? "bg-brand text-white"
+                            : "bg-foreground/[0.06] text-foreground",
                           mine
                             ? endsGroup
                               ? "rounded-br-lg"

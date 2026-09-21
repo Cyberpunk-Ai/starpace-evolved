@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, memo } from "react";
+import { VideoPlayer } from "@/components/social/VideoPlayer";
+import { parseMediaList } from "@/lib/media";
 import { Link } from "@tanstack/react-router";
 import { createPortal } from "react-dom";
 import {
@@ -266,6 +268,7 @@ function PostCardBase({
   const [submittingComment, setSubmittingComment] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const [isTipModalOpen, setIsTipModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -334,7 +337,8 @@ function PostCardBase({
     }
   }
 
-  const mediaSrc = post.image_url || post.media_url;
+  const mediaList = post.image_url ? [post.image_url] : parseMediaList(post.media_url);
+  const mediaSrc = mediaList[0];
 
   async function handleLike() {
     const nextLiked = !state.liked;
@@ -602,52 +606,91 @@ function PostCardBase({
         </div>
       </header>
 
-      {/* Media attachment (Image or Video) */}
-      {mediaSrc && !imageError && (
-        isMediaVideo(mediaSrc) || (post as any).media_type === "video" ? (
-          <div className="mt-3.5 overflow-hidden rounded-2xl border border-border/60 bg-black/90 relative w-full shadow-md group">
-            <video
-              ref={videoRef}
-              src={mediaSrc}
-              controls
-              playsInline
-              muted
-              loop
-              preload="metadata"
-              className="w-full h-auto block rounded-2xl max-h-[540px] object-cover w-full"
-            />
-          </div>
-        ) : (
-          <div
-            onClick={() => setShowImagePreview(true)}
-            className="mt-3.5 overflow-hidden rounded-2xl border border-border/60 bg-neutral-950/20 dark:bg-black/30 cursor-zoom-in transition-all duration-300 hover:border-brand/50 group relative flex items-center justify-center w-full p-0 sm:p-0.5 sm:max-h-[440px]"
-          >
-            <img
-              src={mediaSrc}
-              alt="Post media"
-              loading="lazy"
-              onError={() => setImageError(true)}
-              className="w-full h-auto block rounded-2xl sm:rounded-xl sm:max-h-[420px] sm:object-contain transition-transform duration-500 ease-out group-hover:scale-[1.008]"
-            />
-            <div className="pointer-events-none absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-full bg-black/70 backdrop-blur-md px-2.5 py-1 text-[10px] font-bold text-white/95 flex items-center gap-1 shadow-sm">
-              <Maximize2 className="h-3 w-3 text-brand" /> Zoom
-            </div>
-          </div>
-        )
+      {/* Media attachments — one or many, images and videos */}
+      {mediaList.length > 0 && !imageError && (
+        <div
+          className={cn(
+            "mt-3.5 grid gap-1.5",
+            mediaList.length === 1 ? "grid-cols-1" : "grid-cols-2",
+          )}
+        >
+          {mediaList.map((src, i) =>
+            isMediaVideo(src) || ((post as any).media_type === "video" && mediaList.length === 1) ? (
+              <VideoPlayer
+                key={src + i}
+                src={src}
+                className={cn(
+                  mediaList.length > 2 && i === 0 && "col-span-2",
+                  "w-full",
+                )}
+              />
+            ) : (
+              <div
+                key={src + i}
+                onClick={() => {
+                  setPreviewIndex(i);
+                  setShowImagePreview(true);
+                }}
+                className={cn(
+                  "group relative flex w-full cursor-zoom-in items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-foreground/[0.03] transition-colors hover:border-brand/40",
+                  mediaList.length > 2 && i === 0 && "col-span-2",
+                  mediaList.length === 1 ? "max-h-[440px]" : "aspect-square",
+                )}
+              >
+                <img
+                  src={src}
+                  alt={`Post media ${i + 1}`}
+                  loading="lazy"
+                  onError={() => mediaList.length === 1 && setImageError(true)}
+                  className={cn(
+                    "block w-full transition-transform duration-500 ease-out group-hover:scale-[1.01]",
+                    mediaList.length === 1 ? "h-auto object-contain" : "h-full object-cover",
+                  )}
+                />
+                <div className="pointer-events-none absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-bold text-white opacity-0 backdrop-blur-md transition-opacity group-hover:opacity-100">
+                  <Maximize2 className="h-3 w-3" /> Zoom
+                </div>
+              </div>
+            ),
+          )}
+        </div>
       )}
 
+
+
       {/* Image Full-screen Lightbox Modal */}
-      {showImagePreview && mediaSrc && typeof document !== "undefined" && createPortal(
+      {showImagePreview && mediaList[previewIndex] && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200"
           onClick={() => setShowImagePreview(false)}
         >
           <div className="relative max-w-5xl max-h-[92vh] overflow-hidden rounded-3xl" onClick={(e) => e.stopPropagation()}>
             <img
-              src={mediaSrc}
+              src={mediaList[previewIndex]}
               alt="Full preview"
               className="max-h-[85vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl"
             />
+            {mediaList.length > 1 && (
+              <>
+                <button
+                  onClick={() => setPreviewIndex((i) => (i - 1 + mediaList.length) % mediaList.length)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/70 px-3 py-2 text-white hover:bg-black/90"
+                  aria-label="Previous"
+                >
+                  ‹
+                </button>
+                <button
+                  onClick={() => setPreviewIndex((i) => (i + 1) % mediaList.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/70 px-3 py-2 text-white hover:bg-black/90"
+                  aria-label="Next"
+                >
+                  ›
+                </button>
+                <span className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-[11px] font-bold text-white">
+                  {previewIndex + 1} / {mediaList.length}
+                </span>
+              </>
+            )}
             <button
               onClick={() => setShowImagePreview(false)}
               className="absolute top-4 right-4 rounded-full bg-black/70 p-2 text-white hover:bg-black/90 transition-colors cursor-pointer"
