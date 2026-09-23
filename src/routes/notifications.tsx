@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   Heart,
@@ -181,7 +181,10 @@ function NotificationsPage() {
               return (
                 <button
                   key={n.id}
-                  onClick={() => handleMarkRead(n.id)}
+                  onClick={() => {
+                    void handleMarkRead(n.id);
+                    openTarget(n);
+                  }}
                   style={{ animationDelay: `${i * 45}ms` }}
                   className={cn(
                     "glass-panel flex w-full animate-in items-start gap-3 rounded-3xl p-4 text-left shadow-soft transition-all duration-300 fade-in slide-in-from-bottom-3 hover:-translate-y-0.5 hover:shadow-lift cursor-pointer",
