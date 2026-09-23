@@ -53,7 +53,17 @@ async function myProfileId(supabase: any, userId: string) {
   return String(data.id);
 }
 
-/** Tips received minus everything already withdrawn (excluding failed transfers). */
+/**
+ * Platform fee taken from tips before a creator can withdraw. Pro creators
+ * keep everything; everyone else pays a flat 5%.
+ */
+export const PLATFORM_FEE_RATES: Record<string, number> = { free: 0.05, plus: 0.05, pro: 0 };
+
+function feeRateForPlan(plan?: string | null) {
+  return PLATFORM_FEE_RATES[String(plan ?? "free").toLowerCase()] ?? 0.05;
+}
+
+/** Tips received minus the platform fee, minus everything already withdrawn. */
 async function computeLedger(supabase: any, profileId: string) {
   const [{ data: tips }, { data: payouts }] = await Promise.all([
     supabase
