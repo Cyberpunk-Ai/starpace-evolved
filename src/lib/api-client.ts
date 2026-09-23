@@ -295,6 +295,17 @@ export async function addPostComment(postId: string, content: string) {
   return { comment, commentCount: count ?? 0 };
 }
 
+/** A single post by id, with its author and the viewer's engagement hydrated. */
+export async function getPostById(postId: string): Promise<Post | null> {
+  const { data, error } = await db.from("posts").select("*").eq("id", postId).maybeSingle();
+  if (error) throw error;
+  if (!data || data.hidden) return null;
+  const post = rowToPost(data);
+  await hydrateAuthors([post.user_id]);
+  await hydrateEngagement([post]);
+  return post;
+}
+
 export async function getPostComments(postId: string): Promise<PostComment[]> {
   const { data } = await db
     .from("comments")
