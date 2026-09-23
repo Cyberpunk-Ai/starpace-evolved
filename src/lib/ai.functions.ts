@@ -66,16 +66,43 @@ async function consumeQuota(authUserId: string) {
   return { profileId: profile.id, plan, used: used + 1, limit };
 }
 
+/**
+ * Provider presets. Any OpenAI-compatible endpoint works: set AI_PROVIDER, or
+ * override AI_GATEWAY_URL / AI_TEXT_MODEL / AI_API_KEY directly.
+ */
+const PROVIDERS: Record<string, { url: string; model: string; keyEnv: string }> = {
+  lovable: { url: GATEWAY, model: MODEL, keyEnv: "LOVABLE_API_KEY" },
+  openai: {
+    url: "https://api.openai.com/v1/chat/completions",
+    model: "gpt-4o-mini",
+    keyEnv: "OPENAI_API_KEY",
+  },
+  openrouter: {
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    model: "google/gemini-2.0-flash-001",
+    keyEnv: "OPENROUTER_API_KEY",
+  },
+  groq: {
+    url: "https://api.groq.com/openai/v1/chat/completions",
+    model: "llama-3.3-70b-versatile",
+    keyEnv: "GROQ_API_KEY",
+  },
+};
+
 async function chat(system: string, user: string): Promise<string> {
-  const apiKey = process.env["LOVABLE_API_KEY"];
+  const providerName = (process.env["AI_PROVIDER"] || "lovable").toLowerCase();
+  const provider = PROVIDERS[providerName] ?? PROVIDERS["lovable"]!;
+
+  const apiKey =
+    process.env["AI_API_KEY"] || process.env[provider.keyEnv] || process.env["LOVABLE_API_KEY"];
   if (!apiKey) {
     throw new Error("The AI assistant isn't configured yet. Add an AI key to enable it.");
   }
 
   // Model and gateway are environment-configurable so the same build can be
   // pointed at a different assistant without a code change.
-  const model = process.env["AI_TEXT_MODEL"] || MODEL;
-  const gateway = process.env["AI_GATEWAY_URL"] || GATEWAY;
+  const model = process.env["AI_TEXT_MODEL"] || provider.model;
+  const gateway = process.env["AI_GATEWAY_URL"] || provider.url;
 
   const res = await fetch(gateway, {
     method: "POST",
