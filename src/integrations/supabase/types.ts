@@ -531,6 +531,8 @@ export type Database = {
           id: string
           read: boolean
           recipient_id: string
+          target_id: string | null
+          target_type: string
           type: string
         }
         Insert: {
@@ -540,6 +542,8 @@ export type Database = {
           id?: string
           read?: boolean
           recipient_id: string
+          target_id?: string | null
+          target_type?: string
           type: string
         }
         Update: {
@@ -549,6 +553,8 @@ export type Database = {
           id?: string
           read?: boolean
           recipient_id?: string
+          target_id?: string | null
+          target_type?: string
           type?: string
         }
         Relationships: [
