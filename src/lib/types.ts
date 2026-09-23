@@ -241,6 +241,9 @@ export interface Notification {
   body: string;
   created_at: string;
   read: boolean;
+  /** Where clicking the notification should take the user. */
+  target_type?: "post" | "profile" | string;
+  target_id?: string | null;
 }
 
 export interface TrendingTag {

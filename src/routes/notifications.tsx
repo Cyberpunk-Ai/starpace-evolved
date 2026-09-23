@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
   Heart,
@@ -77,7 +77,20 @@ const meta: Record<Notification["type"], { icon: typeof Heart; tint: string }> =
 const filters = ["All", "Mentions", "Follows", "Likes", "Tips", "Spaces"] as const;
 
 function NotificationsPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<Notification[]>([]);
+
+  /** Open whatever the notification is about: the post, or the person. */
+  function openTarget(n: Notification) {
+    const targetId = n.target_id;
+    if (n.target_type === "post" && targetId) {
+      void navigate({ to: "/post/$postId", params: { postId: targetId } });
+      return;
+    }
+    const profileId = (n.target_type === "profile" && targetId) || n.actor_id;
+    if (profileId) void navigate({ to: "/profile", search: { id: profileId } });
+  }
+
   const [filter, setFilter] = useState<(typeof filters)[number]>("All");
   const [loading, setLoading] = useState(false);
 
@@ -181,7 +194,10 @@ function NotificationsPage() {
               return (
                 <button
                   key={n.id}
-                  onClick={() => handleMarkRead(n.id)}
+                  onClick={() => {
+                    void handleMarkRead(n.id);
+                    openTarget(n);
+                  }}
                   style={{ animationDelay: `${i * 45}ms` }}
                   className={cn(
                     "glass-panel flex w-full animate-in items-start gap-3 rounded-3xl p-4 text-left shadow-soft transition-all duration-300 fade-in slide-in-from-bottom-3 hover:-translate-y-0.5 hover:shadow-lift cursor-pointer",

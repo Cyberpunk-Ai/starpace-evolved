@@ -53,9 +53,19 @@ async function myProfileId(supabase: any, userId: string) {
   return String(data.id);
 }
 
-/** Tips received minus everything already withdrawn (excluding failed transfers). */
+/**
+ * Platform fee taken from tips before a creator can withdraw. Pro creators
+ * keep everything; everyone else pays a flat 5%.
+ */
+export const PLATFORM_FEE_RATES: Record<string, number> = { free: 0.05, plus: 0.05, pro: 0 };
+
+function feeRateForPlan(plan?: string | null) {
+  return PLATFORM_FEE_RATES[String(plan ?? "free").toLowerCase()] ?? 0.05;
+}
+
+/** Tips received minus the platform fee, minus everything already withdrawn. */
 async function computeLedger(supabase: any, profileId: string) {
-  const [{ data: tips }, { data: payouts }] = await Promise.all([
+  const [{ data: tips }, { data: payouts }, { data: profile }] = await Promise.all([
     supabase
       .from("tips")
       .select("id, from_user_id, amount, message, created_at, post_id")
@@ -68,18 +78,25 @@ async function computeLedger(supabase: any, profileId: string) {
       .eq("user_id", profileId)
       .order("created_at", { ascending: false })
       .limit(50),
+    supabase.from("profiles").select("plan").eq("id", profileId).maybeSingle(),
   ]);
 
   const tipRows = (tips ?? []) as any[];
   const payoutRows = (payouts ?? []) as any[];
 
-  const totalEarnings = tipRows.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+  const feeRate = feeRateForPlan(profile?.plan);
+  const gross = tipRows.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+  const platformFee = Math.round(gross * feeRate * 100) / 100;
+  const totalEarnings = Math.round((gross - platformFee) * 100) / 100;
   const withdrawn = payoutRows
     .filter((p) => p.status !== "failed" && p.status !== "reversed")
     .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
 
   return {
-    totalEarnings: Math.round(totalEarnings * 100) / 100,
+    grossEarnings: Math.round(gross * 100) / 100,
+    platformFee,
+    feeRate,
+    totalEarnings,
     pendingBalance: Math.round(Math.max(0, totalEarnings - withdrawn) * 100) / 100,
     tips: tipRows,
     payouts: payoutRows,

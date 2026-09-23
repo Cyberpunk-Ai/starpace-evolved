@@ -410,7 +410,7 @@ function PostCardBase({
   }
 
   function handleShare() {
-    const shareUrl = window.location.origin + "/feed#" + post.id;
+    const shareUrl = window.location.origin + "/post/" + post.id;
     if (navigator.share) {
       navigator
         .share({
@@ -536,7 +536,7 @@ function PostCardBase({
               <div className="space-y-0.5 pb-1">
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(window.location.origin + "/feed#" + post.id);
+                    navigator.clipboard.writeText(window.location.origin + "/post/" + post.id);
                     setShowMenu(false);
                     toast.success("Link copied!");
                   }}
