@@ -77,7 +77,20 @@ const meta: Record<Notification["type"], { icon: typeof Heart; tint: string }> =
 const filters = ["All", "Mentions", "Follows", "Likes", "Tips", "Spaces"] as const;
 
 function NotificationsPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<Notification[]>([]);
+
+  /** Open whatever the notification is about: the post, or the person. */
+  function openTarget(n: Notification) {
+    const targetId = n.target_id;
+    if (n.target_type === "post" && targetId) {
+      void navigate({ to: "/post/$postId", params: { postId: targetId } });
+      return;
+    }
+    const profileId = (n.target_type === "profile" && targetId) || n.actor_id;
+    if (profileId) void navigate({ to: "/profile", search: { id: profileId } });
+  }
+
   const [filter, setFilter] = useState<(typeof filters)[number]>("All");
   const [loading, setLoading] = useState(false);
 
